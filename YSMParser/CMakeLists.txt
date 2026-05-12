@@ -3,7 +3,7 @@
 #
 
 # Add source to this project's executable.
-add_executable (YSMParser  "parsers/YSMParser.hpp" "main.cpp" "parsers/v3/PlayerTextureCollector.hpp" "parsers/v3/YSGPHeaderParser.hpp" "parsers/YSMParser.hpp" "parsers/YSMParser.cpp" "parsers/v3/YSMParserV3.hpp" "parsers/YSMParserV2.hpp"  "parsers/v3/YSMParserV3.cpp" "parsers/exceptions/ParserException.hpp"  "parsers/YSMParserV2.cpp" "parsers/YSMParserV1.cpp" "parsers/YSMParserV1.hpp" "parsers/BufferReader.hpp" "algorithms/CryptoAlgorithms.hpp" "algorithms/CryptoAlgorithms.cpp")
+add_executable (YSMParser  "parsers/YSMParser.hpp" "main.cpp" "parsers/v3/PlayerTextureCollector.hpp" "parsers/v3/YSGPHeaderParser.hpp" "parsers/YSMParser.hpp" "parsers/YSMParser.cpp" "parsers/v3/YSMParserV3.hpp" "parsers/YSMParserV2.hpp"  "parsers/v3/YSMParserV3.cpp" "parsers/exceptions/ParserException.hpp"  "parsers/YSMParserV2.cpp" "parsers/YSMParserV1.cpp" "parsers/YSMParserV1.hpp" "parsers/BufferReader.hpp" "algorithms/CryptoAlgorithms.hpp" "algorithms/CryptoAlgorithms.cpp" "algorithms/YsmZstd.hpp")
 
 if (CMAKE_VERSION VERSION_GREATER 3.12)
   set_property(TARGET YSMParser PROPERTY CXX_STANDARD 20)
@@ -103,7 +103,7 @@ if(YSM_TARGET_JNI)
     "parsers/v3/PlayerTextureCollector.hpp"
     "parsers/v3/YSGPHeaderParser.hpp"
     "platform/PlatformCompat.hpp"
-  )
+   "algorithms/YsmZstd.hpp")
 
   if(CMAKE_VERSION VERSION_GREATER 3.12)
     set_property(TARGET YSMParserJNI PROPERTY CXX_STANDARD 20)

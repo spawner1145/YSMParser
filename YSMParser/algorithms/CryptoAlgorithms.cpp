@@ -5,6 +5,7 @@
 #include "../parsers/YSMParser.hpp"
 #include <array>
 #include <string>
+#include "YsmZstd.hpp"
 
 namespace CryptoUtils {
 
@@ -24,6 +25,50 @@ size_t xchacha_update_state(XChaCha_ctx* ctx, uint64_t hash_v) {
 	}
 
 	return static_cast<size_t>(((hash_v & 0x3F) | 0x40) << 6);
+}
+
+std::vector<uint8_t> ModifiedChaChaEncrypt(const std::vector<uint8_t>& data, const uint8_t* key, const uint8_t* iv, const uint64_t seed) {
+	// 1. 初始状态与解密完全一致
+	std::vector<uint8_t> key_iv(56);
+	std::memcpy(key_iv.data(), key, 32);
+	std::memcpy(key_iv.data() + 32, iv, 24);
+
+	uint64_t hash2 = CityHash64WithSeed(reinterpret_cast<const char*>(key_iv.data()), key_iv.size(), seed);
+
+	size_t next_round_size = ((hash2 & 0x3f) | 0x40) << 6;
+	size_t blockPointer = 0;
+
+	XChaCha_ctx ctx;
+	ctx.rounds = 10 * (hash2 % 3) + 10; // 魔改点：根据 Hash 动态决定轮数 (10, 20 或 30 轮)
+	xchacha_keysetup(&ctx, key, iv);
+
+	std::vector<uint8_t> result;
+	result.reserve(data.size());
+
+	// 2. 加密循环
+	while (blockPointer < data.size()) {
+		if (blockPointer + next_round_size > data.size()) {
+			next_round_size = data.size() - blockPointer;
+		}
+
+		// 这里的 data 是【明文】
+		std::vector<uint8_t> plain1(data.begin() + blockPointer, data.begin() + blockPointer + next_round_size);
+		blockPointer += next_round_size;
+
+		std::vector<uint8_t> enc1(next_round_size);
+		// 执行加密
+		xchacha_encrypt_bytes(&ctx, plain1.data(), enc1.data(), (uint32_t)next_round_size);
+
+		// 【关键点】：必须对【明文 plain1】进行 Hash，以保证与解密端状态同步更新
+		uint64_t res_hash = CityHash64WithSeed(reinterpret_cast<const char*>(plain1.data()), next_round_size, seed);
+
+		// 更新状态，获取下一个块的大小
+		next_round_size = xchacha_update_state(&ctx, res_hash);
+
+		result.insert(result.end(), enc1.begin(), enc1.end());
+	}
+
+	return result;
 }
 
 std::vector<uint8_t> ModifiedChaChaDecrypt(const std::vector<uint8_t>& data, const uint8_t* key, const uint8_t* iv, const uint64_t seed) {
@@ -88,6 +133,7 @@ std::vector<uint8_t> MT19937Xor_Decrypt(const std::vector<uint8_t>& data, const 
 }
 
 std::vector<uint8_t> DecompressZstd(const std::vector<uint8_t>& compressed_data) {
+	auto washed_data = YsmZstd::wash(compressed_data);
 	ZSTD_DCtx* dctx = ZSTD_createDCtx();
 	if (dctx == nullptr) {
 		throw std::runtime_error("Failed to create ZSTD decompression context!");
@@ -95,7 +141,7 @@ std::vector<uint8_t> DecompressZstd(const std::vector<uint8_t>& compressed_data)
 
 	std::vector<uint8_t> decompressed_data;
 
-	ZSTD_inBuffer input = { compressed_data.data(), compressed_data.size(), 0 };
+	ZSTD_inBuffer input = { washed_data.data(), washed_data.size(), 0 };
 
 	size_t const outBuffSize = ZSTD_DStreamOutSize();
 	std::vector<uint8_t> outBuff(outBuffSize);
@@ -116,6 +162,29 @@ std::vector<uint8_t> DecompressZstd(const std::vector<uint8_t>& compressed_data)
 	ZSTD_freeDCtx(dctx);
 
 	return decompressed_data;
+}
+
+std::vector<uint8_t> CompressZstd(const std::vector<uint8_t>& data, int level) {
+	// 获取压缩后所需的最大缓冲大小
+	size_t const dstBound = ZSTD_compressBound(data.size());
+	std::vector<uint8_t> compressed_data(dstBound);
+
+	// 标准压缩
+	size_t const cSize = ZSTD_compress(
+		compressed_data.data(), compressed_data.size(),
+		data.data(), data.size(),
+		level
+	);
+
+	if (ZSTD_isError(cSize)) {
+		throw std::runtime_error(std::string("ZSTD compression failed: ") + ZSTD_getErrorName(cSize));
+	}
+
+	// 裁剪掉多余的 buffer 空间
+	compressed_data.resize(cSize);
+
+	// 混淆为 YSM 魔改格式并返回
+	return YsmZstd::obfuscate(compressed_data);
 }
 
 std::vector<uint8_t> EncryptPacket(const std::vector<uint8_t>& data, std::vector<uint8_t>& Key, std::vector<uint8_t>& nextKey)

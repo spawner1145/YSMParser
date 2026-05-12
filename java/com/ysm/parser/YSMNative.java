@@ -3,7 +3,7 @@ package com.ysm.parser;
 /**
  * JNI wrapper for low-level native algorithms used by YSM.
  *
- * <p>Exposes CityHash, Zstd, XChaCha20, and MT19937 primitives
+ * <p>Exposes CityHash, Zstd, XChaCha20, ModifiedChaCha, and MT19937 primitives
  * directly to Java. All methods are static and thread-safe.
  */
 public class YSMNative {
@@ -38,6 +38,15 @@ public class YSMNative {
      */
     public static native byte[] xchacha20Decrypt(byte[] data, byte[] key, byte[] iv, int rounds);
 
+    /**
+     * YSM-specific modified ChaCha decryptor used by V3 resources.
+     *
+     * @param key   32-byte key
+     * @param iv    24-byte nonce
+     * @param seed  CityHash seed controlling block updates
+     */
+    public static native byte[] modifiedChaChaDecrypt(byte[] data, byte[] key, byte[] iv, long seed);
+
     // ── MT19937 (stateful) ────────────────────────────────────────────────
 
     /**
@@ -54,4 +63,27 @@ public class YSMNative {
 
     /** Destroy the generator and release native resources. */
     public static native void mt19937Destroy(long handle);
+
+    /**
+     * 解压 YSM 魔改的 ZSTD 数据。
+     * 底层会自动执行 wash (洗白) 操作，然后进行标准 ZSTD 解压。
+     *
+     * @param data 压缩且被混淆过的 byte 数组
+     * @return 解压后的原始 byte 数组
+     * @throws RuntimeException 如果底层解码失败或内存分配失败
+     * @throws IllegalArgumentException 如果传入的数据为 null
+     */
+    public static native byte[] ysmZstdDecompress(byte[] data);
+
+    /**
+     * 将数据进行标准 ZSTD 压缩，并混淆为 YSM 魔改格式。
+     * 底层会先进行标准 ZSTD 压缩，然后自动执行 obfuscate (弄脏) 操作。
+     *
+     * @param data 需要压缩的原始 byte 数组
+     * @param level ZSTD 压缩等级 (通常推荐 3，最大通常支持到 22)
+     * @return 压缩且混淆后的 byte 数组
+     * @throws RuntimeException 如果底层压缩失败
+     * @throws IllegalArgumentException 如果传入的数据为 null
+     */
+    public static native byte[] ysmZstdCompress(byte[] data, int level);
 }

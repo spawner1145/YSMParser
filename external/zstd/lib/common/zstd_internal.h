@@ -83,10 +83,7 @@ static UNUSED_ATTR const size_t ZSTD_did_fieldSize[4] = { 0, 1, 2, 4 };
 
 #define ZSTD_BLOCKHEADERSIZE 3   /* C standard doesn't allow `static const` variable to be init using another `static const` variable */
 static UNUSED_ATTR const size_t ZSTD_blockHeaderSize = ZSTD_BLOCKHEADERSIZE;
-
-// typedef enum { bt_raw, bt_rle, bt_compressed, bt_reserved } blockType_e;
-// YSM-Modified:
-typedef enum { bt_compressed, bt_rle, bt_reserved, bt_raw} blockType_e;
+typedef enum { bt_raw, bt_rle, bt_compressed, bt_reserved } blockType_e;
 
 #define ZSTD_FRAMECHECKSUMSIZE 4
 
@@ -171,7 +168,7 @@ static UNUSED_ATTR const U32 OF_defaultNormLog = OF_DEFAULTNORMLOG;
 *  Shared functions to include for inlining
 *********************************************/
 static void ZSTD_copy8(void* dst, const void* src) {
-#if defined(ZSTD_ARCH_ARM_NEON) && !defined(__aarch64__)
+#if defined(ZSTD_ARCH_ARM_NEON)
     vst1_u8((uint8_t*)dst, vld1_u8((const uint8_t*)src));
 #else
     ZSTD_memcpy(dst, src, 8);
@@ -188,8 +185,6 @@ static void ZSTD_copy16(void* dst, const void* src) {
     vst1q_u8((uint8_t*)dst, vld1q_u8((const uint8_t*)src));
 #elif defined(ZSTD_ARCH_X86_SSE2)
     _mm_storeu_si128((__m128i*)dst, _mm_loadu_si128((const __m128i*)src));
-#elif defined(ZSTD_ARCH_RISCV_RVV)
-    __riscv_vse8_v_u8m1((uint8_t*)dst, __riscv_vle8_v_u8m1((const uint8_t*)src, 16), 16);
 #elif defined(__clang__)
     ZSTD_memmove(dst, src, 16);
 #else
@@ -218,7 +213,7 @@ typedef enum {
  *           The src buffer must be before the dst buffer.
  */
 MEM_STATIC FORCE_INLINE_ATTR
-void ZSTD_wildcopy(void* dst, const void* src, size_t length, ZSTD_overlap_e const ovtype)
+void ZSTD_wildcopy(void* dst, const void* src, ptrdiff_t length, ZSTD_overlap_e const ovtype)
 {
     ptrdiff_t diff = (BYTE*)dst - (const BYTE*)src;
     const BYTE* ip = (const BYTE*)src;

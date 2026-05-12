@@ -468,6 +468,7 @@ private:
 
 } // namespace
 
+#include "algorithms/CryptoAlgorithms.hpp"
 int main(int argc, char** argv) {
     PlatformCompat::init_console_utf8();
 
@@ -482,6 +483,7 @@ int main(int argc, char** argv) {
     std::string base_output_dir;
     bool verbose = false;
     bool debug = false;
+    bool formatJson = false;
     unsigned int requested_threads = 0;
 
     app.add_option("-i,--input", input_dir_path, "Path to the input directory.")
@@ -490,6 +492,7 @@ int main(int argc, char** argv) {
         ->required();
     app.add_flag("-v,--verbose", verbose, "Show detailed per-file banners and parser logs.");
     app.add_flag("-d,--debug", debug, "Export all binary products (Only for V3).");
+    app.add_flag("-f,--format", formatJson, "Format all json (Only for V3).");
     app.add_option("-j,--threads", requested_threads, "Number of files to process in parallel. 0 = auto.");
 
 #if YSM_WASM_TARGET
@@ -579,6 +582,7 @@ int main(int argc, char** argv) {
                 auto parser = YSMParserFactory::Create(utf8_input);
                 parser->setVerbose(verbose);
                 parser->setDebug(debug);
+				parser->setFormatJson(formatJson);
                 const int version = parser->getYSGPVersion();
 
                 if (verbose) {

@@ -19,9 +19,13 @@ size_t xchacha_update_state(XChaCha_ctx* ctx, uint64_t hash_v);
 
 std::vector<uint8_t> ModifiedChaChaDecrypt(const std::vector<uint8_t>& data, const uint8_t* key, const uint8_t* iv, uint64_t seed);
 
+std::vector<uint8_t> ModifiedChaChaEncrypt(const std::vector<uint8_t>& data, const uint8_t* key, const uint8_t* iv, const uint64_t seed);
+
 std::vector<uint8_t> MT19937Xor_Decrypt(const std::vector<uint8_t>& data, const uint8_t* key, const uint8_t* iv);
 
 std::vector<uint8_t> DecompressZstd(const std::vector<uint8_t>& compressed_data);
+
+std::vector<uint8_t> CompressZstd(const std::vector<uint8_t>& data, int level);
 
 std::vector<uint8_t> EncryptPacket(const std::vector<uint8_t>& data, std::vector<uint8_t>& Key, std::vector<uint8_t>& nextKey);
 

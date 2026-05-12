@@ -1,13 +1,16 @@
 #include <jni.h>
 #include <cstdint>
 #include <cstring>
+#include <exception>
 #include <memory>
 #include <random>
 #include <mutex>
 #include <unordered_map>
+#include <vector>
 #include <city.h>
 #include <zstd.h>
 #include <xchacha20.h>
+#include "CryptoAlgorithms.hpp"
 
 // ─── CityHash ────────────────────────────────────────────────────────────────
 
@@ -184,6 +187,115 @@ Java_com_ysm_parser_YSMNative_xchacha20Decrypt(JNIEnv* env, jclass,
     return Java_com_ysm_parser_YSMNative_xchacha20Encrypt(env, nullptr, data, key, iv, rounds);
 }
 
+JNIEXPORT jbyteArray JNICALL
+Java_com_ysm_parser_YSMNative_modifiedChaChaDecrypt(JNIEnv* env, jclass,
+        jbyteArray data, jbyteArray key, jbyteArray iv, jlong seed) {
+    if (data == nullptr || key == nullptr || iv == nullptr) {
+        jclass exClass = env->FindClass("java/lang/IllegalArgumentException");
+        env->ThrowNew(exClass, "data, key, and iv must not be null");
+        return nullptr;
+    }
+    if (env->GetArrayLength(key) != 32 || env->GetArrayLength(iv) != 24) {
+        jclass exClass = env->FindClass("java/lang/IllegalArgumentException");
+        env->ThrowNew(exClass, "Key must be 32 bytes and IV must be 24 bytes");
+        return nullptr;
+    }
+
+    try {
+        const jsize dataLen = env->GetArrayLength(data);
+        std::vector<uint8_t> input(static_cast<size_t>(dataLen));
+        std::vector<uint8_t> keyBytes(32);
+        std::vector<uint8_t> ivBytes(24);
+
+        if (dataLen > 0) {
+            env->GetByteArrayRegion(data, 0, dataLen, reinterpret_cast<jbyte*>(input.data()));
+            if (env->ExceptionCheck()) return nullptr;
+        }
+        env->GetByteArrayRegion(key, 0, 32, reinterpret_cast<jbyte*>(keyBytes.data()));
+        if (env->ExceptionCheck()) return nullptr;
+        env->GetByteArrayRegion(iv, 0, 24, reinterpret_cast<jbyte*>(ivBytes.data()));
+        if (env->ExceptionCheck()) return nullptr;
+
+        std::vector<uint8_t> result = CryptoUtils::ModifiedChaChaDecrypt(
+            input,
+            keyBytes.data(),
+            ivBytes.data(),
+            static_cast<uint64_t>(seed));
+
+        jbyteArray out = env->NewByteArray(static_cast<jsize>(result.size()));
+        if (out == nullptr) return nullptr;
+        if (!result.empty()) {
+            env->SetByteArrayRegion(out, 0, static_cast<jsize>(result.size()),
+                                    reinterpret_cast<const jbyte*>(result.data()));
+        }
+        return out;
+    } catch (const std::exception& e) {
+        jclass exClass = env->FindClass("java/lang/RuntimeException");
+        env->ThrowNew(exClass, e.what());
+        return nullptr;
+    } catch (...) {
+        jclass exClass = env->FindClass("java/lang/RuntimeException");
+        env->ThrowNew(exClass, "Unknown native error during ModifiedChaCha decrypt");
+        return nullptr;
+    }
+}
+
+
+JNIEXPORT jbyteArray JNICALL
+Java_com_ysm_parser_YSMNative_modifiedChaChaEncrypt(JNIEnv* env, jclass,
+    jbyteArray data, jbyteArray key, jbyteArray iv, jlong seed) {
+    if (data == nullptr || key == nullptr || iv == nullptr) {
+        jclass exClass = env->FindClass("java/lang/IllegalArgumentException");
+        env->ThrowNew(exClass, "data, key, and iv must not be null");
+        return nullptr;
+    }
+    if (env->GetArrayLength(key) != 32 || env->GetArrayLength(iv) != 24) {
+        jclass exClass = env->FindClass("java/lang/IllegalArgumentException");
+        env->ThrowNew(exClass, "Key must be 32 bytes and IV must be 24 bytes");
+        return nullptr;
+    }
+
+    try {
+        const jsize dataLen = env->GetArrayLength(data);
+        std::vector<uint8_t> input(static_cast<size_t>(dataLen));
+        std::vector<uint8_t> keyBytes(32);
+        std::vector<uint8_t> ivBytes(24);
+
+        if (dataLen > 0) {
+            env->GetByteArrayRegion(data, 0, dataLen, reinterpret_cast<jbyte*>(input.data()));
+            if (env->ExceptionCheck()) return nullptr;
+        }
+        env->GetByteArrayRegion(key, 0, 32, reinterpret_cast<jbyte*>(keyBytes.data()));
+        if (env->ExceptionCheck()) return nullptr;
+        env->GetByteArrayRegion(iv, 0, 24, reinterpret_cast<jbyte*>(ivBytes.data()));
+        if (env->ExceptionCheck()) return nullptr;
+
+        std::vector<uint8_t> result = CryptoUtils::ModifiedChaChaEncrypt(
+            input,
+            keyBytes.data(),
+            ivBytes.data(),
+            static_cast<uint64_t>(seed));
+
+        jbyteArray out = env->NewByteArray(static_cast<jsize>(result.size()));
+        if (out == nullptr) return nullptr;
+        if (!result.empty()) {
+            env->SetByteArrayRegion(out, 0, static_cast<jsize>(result.size()),
+                reinterpret_cast<const jbyte*>(result.data()));
+        }
+        return out;
+    }
+    catch (const std::exception& e) {
+        jclass exClass = env->FindClass("java/lang/RuntimeException");
+        env->ThrowNew(exClass, e.what());
+        return nullptr;
+    }
+    catch (...) {
+        jclass exClass = env->FindClass("java/lang/RuntimeException");
+        env->ThrowNew(exClass, "Unknown native error during ModifiedChaCha encrypt");
+        return nullptr;
+    }
+}
+
 // ─── MT19937 (stateful) ──────────────────────────────────────────────────────
 
 namespace {
@@ -255,4 +367,86 @@ Java_com_ysm_parser_YSMNative_mt19937Destroy(JNIEnv*, jclass, jlong handle) {
     g_mtStates.erase(static_cast<uint64_t>(handle));
 }
 
+
+JNIEXPORT jbyteArray JNICALL
+Java_com_ysm_parser_YSMNative_ysmZstdDecompress(JNIEnv* env, jclass, jbyteArray data) {
+    if (data == nullptr) {
+        jclass exClass = env->FindClass("java/lang/IllegalArgumentException");
+        env->ThrowNew(exClass, "Input data cannot be null");
+        return nullptr;
+    }
+
+    try {
+        jsize len = env->GetArrayLength(data);
+        std::vector<uint8_t> input(static_cast<size_t>(len));
+
+        if (len > 0) {
+            env->GetByteArrayRegion(data, 0, len, reinterpret_cast<jbyte*>(input.data()));
+            if (env->ExceptionCheck()) return nullptr; // 内存溢出或其他异常直接返回
+        }
+
+        // 调用 C++ 核心解码（附带 wash）
+        std::vector<uint8_t> result = CryptoUtils::DecompressZstd(input);
+
+        jbyteArray out = env->NewByteArray(static_cast<jsize>(result.size()));
+        if (out == nullptr) return nullptr;
+        if (!result.empty()) {
+            env->SetByteArrayRegion(out, 0, static_cast<jsize>(result.size()),
+                reinterpret_cast<const jbyte*>(result.data()));
+        }
+        return out;
+
+    }
+    catch (const std::exception& e) {
+        jclass exClass = env->FindClass("java/lang/RuntimeException");
+        env->ThrowNew(exClass, e.what());
+        return nullptr;
+    }
+    catch (...) {
+        jclass exClass = env->FindClass("java/lang/RuntimeException");
+        env->ThrowNew(exClass, "Unknown native error during YSM ZSTD decompression");
+        return nullptr;
+    }
+}
+
+JNIEXPORT jbyteArray JNICALL
+Java_com_ysm_parser_YSMNative_ysmZstdCompress(JNIEnv* env, jclass, jbyteArray data, jint level) {
+    if (data == nullptr) {
+        jclass exClass = env->FindClass("java/lang/IllegalArgumentException");
+        env->ThrowNew(exClass, "Input data cannot be null");
+        return nullptr;
+    }
+
+    try {
+        jsize len = env->GetArrayLength(data);
+        std::vector<uint8_t> input(static_cast<size_t>(len));
+
+        if (len > 0) {
+            env->GetByteArrayRegion(data, 0, len, reinterpret_cast<jbyte*>(input.data()));
+            if (env->ExceptionCheck()) return nullptr;
+        }
+
+        // 调用 C++ 核心编码（附带 obfuscate）
+        std::vector<uint8_t> result = CryptoUtils::CompressZstd(input, static_cast<int>(level));
+
+        jbyteArray out = env->NewByteArray(static_cast<jsize>(result.size()));
+        if (out == nullptr) return nullptr;
+        if (!result.empty()) {
+            env->SetByteArrayRegion(out, 0, static_cast<jsize>(result.size()),
+                reinterpret_cast<const jbyte*>(result.data()));
+        }
+        return out;
+
+    }
+    catch (const std::exception& e) {
+        jclass exClass = env->FindClass("java/lang/RuntimeException");
+        env->ThrowNew(exClass, e.what());
+        return nullptr;
+    }
+    catch (...) {
+        jclass exClass = env->FindClass("java/lang/RuntimeException");
+        env->ThrowNew(exClass, "Unknown native error during YSM ZSTD compression");
+        return nullptr;
+    }
+}
 } // extern "C"

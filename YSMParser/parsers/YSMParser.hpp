@@ -14,13 +14,16 @@ public:
 	virtual void saveToDirectory(std::string output_directory) = 0;
 	void setVerbose(bool verbose) { m_verbose = verbose; }
 	void setDebug(bool debug) { m_debug = debug; }
+	void setFormatJson(bool formatJson) { m_formatJson = formatJson; }
 	virtual ~YSMParser() = default;
 protected:
 	bool isVerbose() const { return m_verbose; }
 	bool isDebug() const { return m_debug; }
+	bool isFormatJson() const { return m_formatJson; }
 private:
 	bool m_verbose = false;
 	bool m_debug = false;
+	bool m_formatJson = false;
 };
 
 namespace YSMParserFactory {
